@@ -267,6 +267,9 @@ namespace MiniBank.Api.Migrations
                     b.Property<DateTime?>("ExecutedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("ObligationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Purpose")
                         .IsRequired()
                         .HasColumnType("text");
@@ -297,6 +300,10 @@ namespace MiniBank.Api.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ObligationId")
+                        .IsUnique()
+                        .HasFilter("\"ObligationId\" IS NOT NULL AND \"Status\" IN ('PENDING_APPROVAL', 'EXECUTED')");
 
                     b.HasIndex("ReviewedById");
 
@@ -418,6 +425,11 @@ namespace MiniBank.Api.Migrations
 
             modelBuilder.Entity("MiniBank.Api.Transfer", b =>
                 {
+                    b.HasOne("MiniBank.Api.Obligation", null)
+                        .WithMany()
+                        .HasForeignKey("ObligationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MiniBank.Api.AppUser", null)
                         .WithMany()
                         .HasForeignKey("RequestedById")

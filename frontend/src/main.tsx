@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { api, ApiError, refreshCsrf } from './api';
 import { money, ReviewQueue, TransferPanel } from './Banking';
 import { Community } from './Community';
+import { Administration } from './Administration';
+import { Obligations } from './Obligations';
 import './style.css';
 import './mvp.css';
 
@@ -71,11 +73,13 @@ function App() {
       <label>Geslo<input name="password" type="password" autoComplete="current-password" required/></label>
       <button className="primary" disabled={busy}>{busy ? 'Prijavljanje …' : 'Prijava'}</button></form></section>
     : <><p className="eyebrow">{user.role === 'CLIENT' ? 'OSEBNE FINANCE' : 'DELOVNI PROSTOR'}</p><h1>Pozdravljeni, {user.name}.</h1>
-      {user.role === 'EMPLOYEE' ? <ReviewQueue/> : user.role === 'ADMIN' ? <section><h2>Administracija</h2></section> : <>
+      {user.role === 'EMPLOYEE' ? <ReviewQueue/> : user.role === 'ADMIN'
+        ? <Administration currentId={user.id} onAccessChanged={() => setUser(null)}/> : <>
         <h2>Moji računi</h2>{accounts.length === 0 ? <p>Nimate odprtega računa.</p> : <div className="accounts">{accounts.map(a => <button key={a.id} className={`account ${selected === a.id ? 'selected' : ''}`} onClick={() => { setError(''); setSelected(a.id); }} aria-pressed={selected === a.id}><span>{a.label}</span><strong>{money(a.balance)}</strong><small>{a.number}</small></button>)}</div>}
         {selected && <section><h2>Zadnja izvedena nakazila</h2><p>Največ 20 nakazil za izbrani račun.</p>{historyLoading ? <p role="status">Nalaganje nakazil …</p> : transactions.length === 0 ? <p>Za ta račun še ni izvedenih nakazil.</p> : <div className="table-scroll"><table><thead><tr><th>Datum</th><th>Namen</th><th>Smer</th><th>Znesek</th></tr></thead><tbody>{transactions.map(t => <tr key={t.id}><td>{new Date(t.date).toLocaleString('sl-SI')}</td><td>{t.purpose}</td><td>{t.direction === 'IN' ? 'Priliv' : 'Odliv'}</td><td>{t.direction === 'IN' ? '+' : '−'}{money(t.amount)}</td></tr>)}</tbody></table></div>}</section>}
         {selected && <TransferPanel key={selected} accountId={selected} onChange={reloadBanking}/>}
-        <Community userId={user.id} accounts={accounts}/>
+        <Community userId={user.id} accounts={accounts} obligations={(groupId, version) =>
+          <Obligations groupId={groupId} accounts={accounts} onChange={reloadBanking} revision={version}/>}/>
       </> }</> }</main><footer>MiniBank · Izmišljeni podatki za učenje</footer></>;
 }
 createRoot(document.getElementById('root')!).render(<App/>);

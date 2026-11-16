@@ -2,7 +2,7 @@
 
 Učna simulacija skupnostnega bančništva z izmišljenimi podatki in EUR.
 
-Implementirani so prijava, odjava, strežniške seje, CSRF ter pregled lastnih računov in zadnjih 20 izvedenih nakazil. Nakazila, skupine, stroški, obveznosti in upravljanje dostopov sledijo v naslednjih iteracijah.
+MVP pokriva US-01–US-07 in US-16–US-18. Komitent lahko pregleda račune, odda nakazilo, sodeluje v skupini, razdeli strošek in poravna obveznost. Uslužbenec obravnava nakazila nad 500 EUR, administrator pa uporabniške dostope.
 
 [MVP Board](https://github.com/users/JakaM1/projects/3) · [Načrt in preverjanje](docs/08-implementacija-mvp.md) · [Uporabniške zgodbe](docs/05-uporabniske-zgodbe.md) · [Arhitektura](docs/04-arhitektura-in-tehnoloski-sklad.md) · [ADR](docs/adr/README.md)
 
@@ -32,7 +32,9 @@ npm ci
 npm run dev
 ```
 
-Odprite [localhost:5173](http://localhost:5173). Razvojni inicializator samo v prazni bazi pripravi `ana@minibank.test`, `bor@minibank.test`, `cene@minibank.test`, `usluzbenec@minibank.test` in `admin@minibank.test` z vašim `Seed:Password`. Komitenti dobijo po 200 EUR. Zgodovina nakazil je sprva prazna. Uslužbenec in administrator imata za zdaj začetni zaslon brez poslovnih dejanj.
+Odprite [localhost:5173](http://localhost:5173). Razvojni inicializator v prazni bazi pripravi `ana@minibank.test`, `bor@minibank.test`, `cene@minibank.test`, `usluzbenec@minibank.test` in `admin@minibank.test` z vašim `Seed:Password`. Trije demonstracijski komitenti dobijo po 200 EUR. Povabila se prikažejo v aplikaciji uporabniku z vnesenim e-poštnim naslovom.
+
+Za preizkus skupinske poravnave naj Ana ustvari skupino in povabi Bora. Ko Bor sprejme povabilo, naj Ana razdeli strošek 60 EUR na enaka deleža in odda predlog. Bor potrdi delež in v razdelku **Obveznosti skupine** poravna 30 EUR.
 
 Ponovni zagon API zahteva novo prijavo in ohrani podatke. `docker compose stop` ohrani bazo. Namesto Dockerja lahko uporabite lokalni PostgreSQL 17 in prilagodite povezovalni niz. Backend `.env` ne bere; uporablja user-secrets ali okoljske spremenljivke.
 

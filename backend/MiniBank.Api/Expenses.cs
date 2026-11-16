@@ -11,6 +11,9 @@ internal static class Expenses
     public const string Disputed = "DISPUTED";
     public const string Confirmed = "CONFIRMED";
     public const string Accepted = "ACCEPTED";
+    public const string Cancelled = "CANCELLED";
+    public const string Superseded = "SUPERSEDED";
+    private static readonly TimeZoneInfo Ljubljana = TimeZoneInfo.FindSystemTimeZoneById("Europe/Ljubljana");
 
     public static void MapExpenses(this WebApplication app)
     {
@@ -21,6 +24,7 @@ internal static class Expenses
         expense.MapPost("/{id:guid}/submit", Submit);
         expense.MapPost("/{id:guid}/decision", Decide);
         expense.MapPost("/{id:guid}/revise", Revise);
+        expense.MapPost("/{id:guid}/cancel", Cancel);
     }
 
     private static async Task<IResult> List(Guid groupId, ClaimsPrincipal user, BankDb db)
@@ -28,13 +32,14 @@ internal static class Expenses
         var owner = Id(user);
         if (!await Groups.IsMember(db, groupId, owner)) return Results.NotFound();
         var expenses = await db.Expenses.AsNoTracking().Include(x => x.Shares)
-            .Where(x => x.GroupId == groupId && (x.Status != Draft || x.PayerId == owner))
+            .Where(x => x.GroupId == groupId && (x.PayerId == owner
+                || x.Status != Draft && x.Shares.Any(s => s.UserId == x.PayerId && s.Decision == Accepted)))
             .OrderByDescending(x => x.Date).ThenByDescending(x => x.Version).ThenBy(x => x.Id).ToListAsync();
         return Results.Ok(expenses.Select(x => new
         {
-            x.Id, x.Title, x.Category, x.Date, x.PayerId, x.AccountId, x.Version, x.PreviousId, x.Status,
+            x.Id, x.Title, x.Category, x.Date, x.PayerId, accountId = x.PayerId == owner ? (Guid?)x.AccountId : null,
+            x.Version, x.PreviousId, x.Status,
             total = Money(x.Total),
-            revised = expenses.Any(other => other.PreviousId == x.Id),
             shares = x.Shares.Select(s => new { s.UserId, amount = Money(s.Value), s.Decision, s.Reason, s.DecidedAt })
         }));
     }
@@ -124,7 +129,19 @@ internal static class Expenses
                 Date = prior.Date, Total = prior.Total,
                 Shares = prior.Shares.Select(s => new ExpenseShare { UserId = s.UserId, Value = s.Value }).ToList() };
             db.Expenses.Add(next);
+            prior.Status = Superseded;
             return Results.Json(new { next.Id }, statusCode: 201);
+        });
+
+    private static Task<IResult> Cancel(Guid groupId, Guid id, ClaimsPrincipal user, BankDb db) =>
+        Write(db, user, groupId, async owner =>
+        {
+            var expense = await Find(db, groupId, id);
+            if (expense is null || expense.PayerId != owner) return Results.NotFound();
+            if (expense.Status is not (Draft or Pending or Disputed))
+                return Error(409, "Tega predloga ni več mogoče preklicati.");
+            expense.Status = Cancelled;
+            return Results.NoContent();
         });
 
     private static Task<IResult> Write(BankDb db, ClaimsPrincipal user, Guid group, Func<Guid, Task<IResult>> action) =>
@@ -150,8 +167,10 @@ internal static class Expenses
         var title = input.Title?.Trim();
         var category = input.Category?.Trim();
         var people = input.Shares;
-        if (title is null or "" || title.Length > 140 || category is null or "" || category.Length > 80
-            || input.Date == default || input.Date > DateOnly.FromDateTime(DateTime.UtcNow)
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Ljubljana));
+        if (title is null or "" || title.Length > 140
+            || category is not ("FOOD" or "TRANSPORT" or "ACCOMMODATION" or "HOUSEHOLD" or "OTHER")
+            || input.Date == default || input.Date > today
             || !Amount(input.Total, out var total) || total <= 0
             || people is null || people.Length < 2 || people.Any(x => x is null))
             return Error(400, "Vnesite veljaven strošek, datum in vsaj dva udeleženca.");

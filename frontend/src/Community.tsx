@@ -8,16 +8,19 @@ type Member = { id: string; name: string; active: boolean };
 type GroupDetail = { id: string; name: string; organizer: boolean; members: Member[] };
 type Share = { userId: string; amount: string; decision: string; reason: string | null };
 type Expense = {
-  id: string; title: string; category: string; date: string; payerId: string; accountId: string;
-  total: string; status: string; version: number; revised: boolean; shares: Share[];
+  id: string; title: string; category: string; date: string; payerId: string; accountId: string | null;
+  total: string; status: string; version: number; shares: Share[];
 };
 const expenseStatus: Record<string, string> = {
   DRAFT: 'Osnutek', PENDING_CONFIRMATION: 'Čaka na potrditve', DISPUTED: 'Ugovor', CONFIRMED: 'Potrjeno',
-  PENDING: 'Čaka', ACCEPTED: 'Potrjeno',
+  PENDING: 'Čaka', ACCEPTED: 'Potrjeno', CANCELLED: 'Preklicano', SUPERSEDED: 'Nadomeščeno',
+};
+const categories: Record<string, string> = {
+  FOOD: 'Hrana', TRANSPORT: 'Prevoz', ACCOMMODATION: 'Prenočišče', HOUSEHOLD: 'Gospodinjstvo', OTHER: 'Drugo',
 };
 
 export function Community({ userId, accounts, obligations }: {
-  userId: string; accounts: AccountChoice[]; obligations?: (groupId: string) => ReactNode;
+  userId: string; accounts: AccountChoice[]; obligations: (groupId: string, revision: number) => ReactNode;
 }) {
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [selected, setSelected] = useState('');
@@ -60,6 +63,7 @@ export function Community({ userId, accounts, obligations }: {
       {groups.length === 0 && <p>Za zdaj nimaš skupin ali povabil.</p>}
       {groups.map(group => group.status === 'INVITED'
         ? <div className="entry" key={group.id}><p>Povabilo v skupino <b>{group.name}</b> · organizator {group.organizer}</p>
+            <p>Po sprejemu boš lahko videl tudi prejšnje oddane predloge skupine.</p>
             <div className="actions">
               <button disabled={busy} onClick={() => change(`/groups/${group.id}/invitation`, { accept: true }, () => setSelected(group.id))}>Sprejmi</button>
               <button disabled={busy} onClick={() => change(`/groups/${group.id}/invitation`, { accept: false })}>Zavrni</button>
@@ -73,7 +77,7 @@ export function Community({ userId, accounts, obligations }: {
 }
 
 function GroupWorkspace({ id, userId, accounts, obligations }: {
-  id: string; userId: string; accounts: AccountChoice[]; obligations?: (groupId: string) => ReactNode;
+  id: string; userId: string; accounts: AccountChoice[]; obligations: (groupId: string, revision: number) => ReactNode;
 }) {
   const [detail, setDetail] = useState<GroupDetail>();
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -135,7 +139,7 @@ function GroupWorkspace({ id, userId, accounts, obligations }: {
           const path = `/expenses/${expense.id}`;
           return <article className="entry" key={expense.id}>
             <strong>{expense.title} · {money(expense.total)}</strong>
-            <p>{name(expense.payerId)} · {expense.category} · {expense.date} · različica {expense.version} · {expenseStatus[expense.status]}</p>
+            <p>{name(expense.payerId)} · {categories[expense.category] ?? expense.category} · {expense.date} · različica {expense.version} · {expenseStatus[expense.status]}</p>
             <ul>{expense.shares.map(item => <li key={item.userId}>
               {name(item.userId)} · {money(item.amount)} · {expenseStatus[item.decision]}{item.reason && ` · ${item.reason}`}
             </li>)}</ul>
@@ -143,8 +147,10 @@ function GroupWorkspace({ id, userId, accounts, obligations }: {
               <button disabled={busy} onClick={() => setEditing(expense.id)}>Uredi osnutek</button>
               <button disabled={busy} onClick={() => change(`${path}/submit`, {})}>Oddaj v potrditev</button>
             </div>}
-            {mine && expense.status === 'DISPUTED' && !expense.revised &&
+            {mine && expense.status === 'DISPUTED' &&
               <button disabled={busy} onClick={() => change(`${path}/revise`, {}, result => setEditing(result?.id ?? ''))}>Ustvari novo različico</button>}
+            {mine && ['DRAFT', 'PENDING_CONFIRMATION', 'DISPUTED'].includes(expense.status) &&
+              <button disabled={busy} onClick={() => change(`${path}/cancel`, {})}>Prekliči predlog</button>}
             {!mine && expense.status === 'PENDING_CONFIRMATION' && share?.decision === 'PENDING' && <>
               <button disabled={busy} onClick={() => change(`${path}/decision`, { accept: true })}>Potrdi svoj delež</button>
               <form onSubmit={event => {
@@ -159,7 +165,7 @@ function GroupWorkspace({ id, userId, accounts, obligations }: {
         })}
       </>}
     </section>
-    {detail && obligations?.(id)}
+    {detail && obligations(id, revision)}
   </>;
 }
 
@@ -168,9 +174,14 @@ function ExpenseForm({ draft, accounts, members, userId, busy, save }: {
   save: (input: object, reset: () => void) => void;
 }) {
   const [equal, setEqual] = useState(!draft);
+  const [total, setTotal] = useState(draft?.total ?? '');
   const [participants, setParticipants] = useState(() => new Set(draft?.shares.map(item => item.userId) ?? [userId]));
-  const today = new Date();
-  const localDate = new Date(today.getTime() - today.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+  const localDate = new Intl.DateTimeFormat('sv-SE', { dateStyle: 'short', timeZone: 'Europe/Ljubljana' }).format(new Date());
+  const included = members.filter(member => member.active && participants.has(member.id));
+  const previewOrder = included.slice().sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const parts = total.trim().match(/^([0-9]{1,13})(?:[.,]([0-9]{1,2}))?$/);
+  const cents = parts ? BigInt(parts[1]) * 100n + BigInt((parts[2] ?? '').padEnd(2, '0')) : 0n;
+  const count = BigInt(previewOrder.length);
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -178,24 +189,26 @@ function ExpenseForm({ draft, accounts, members, userId, busy, save }: {
     save({
       title: fields.get('title'), category: fields.get('category'), date: fields.get('date'),
       total: String(fields.get('total')).trim().replace(',', '.'), accountId: fields.get('account'), equal,
-      shares: members.filter(member => member.active && participants.has(member.id))
+      shares: included
         .map(member => ({ userId: member.id, amount: equal ? undefined : String(fields.get(member.id)).trim().replace(',', '.') })),
-    }, () => { form.reset(); setEqual(true); setParticipants(new Set([userId])); });
+    }, () => { form.reset(); setTotal(''); setEqual(true); setParticipants(new Set([userId])); });
   }
   return <form onSubmit={submit}>
     <div className="form-grid">
       <label>Naziv<input name="title" required maxLength={140} defaultValue={draft?.title}/></label>
-      <label>Kategorija<input name="category" required maxLength={80} defaultValue={draft?.category}/></label>
+      <label>Kategorija<select name="category" defaultValue={draft?.category ?? 'FOOD'}>
+        {Object.entries(categories).map(([key, label]) => <option value={key} key={key}>{label}</option>)}
+      </select></label>
       <label>Datum plačila<input name="date" type="date" max={localDate} required defaultValue={draft?.date ?? localDate}/></label>
-      <label>Znesek v EUR<input name="total" inputMode="decimal" required defaultValue={draft?.total}/></label>
-      <label>Račun za povračilo<select name="account" required defaultValue={draft?.accountId}>
+      <label>Znesek v EUR<input name="total" inputMode="decimal" required maxLength={16}
+        value={total} onChange={event => setTotal(event.target.value)}/></label>
+      <label>Račun za povračilo<select name="account" required defaultValue={draft?.accountId ?? undefined}>
         {accounts.map(account => <option key={account.id} value={account.id}>{account.label} ({account.number})</option>)}
       </select></label>
       <label>Delitev<select value={equal ? 'equal' : 'manual'} onChange={event => setEqual(event.target.value === 'equal')}>
         <option value="equal">Enakomerno</option><option value="manual">Ročno</option>
       </select></label>
     </div>
-    {equal && <p className="note">Preostali centi se razdelijo po vrstnem redu ID-jev udeležencev.</p>}
     <fieldset><legend>Udeleženci</legend>{members.filter(member => member.active).map(member => <div key={member.id}>
       <label className="check"><input type="checkbox" checked={participants.has(member.id)} disabled={member.id === userId}
         onChange={event => {
@@ -210,6 +223,12 @@ function ExpenseForm({ draft, accounts, members, userId, busy, save }: {
         <input inputMode="decimal" name={member.id} required defaultValue={draft?.shares.find(s => s.userId === member.id)?.amount}/>
       </label>}
     </div>)}</fieldset>
+    {equal && count >= 2n && cents > 0n && <ul aria-label="Predogled enakomerne delitve">
+      {previewOrder.map((member, index) => {
+        const share = cents / count + (BigInt(index) < cents % count ? 1n : 0n);
+        return <li key={member.id}>{member.name} · {money(`${share / 100n}.${String(share % 100n).padStart(2, '0')}`)}</li>;
+      })}
+    </ul>}
     <button disabled={busy} className="primary">Shrani osnutek</button>
   </form>;
 }
