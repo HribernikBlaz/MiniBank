@@ -36,6 +36,7 @@ public class Transfer
     public Guid? ReviewedById { get; set; }
     public DateTime? ReviewedAt { get; set; }
     public string? ReviewReason { get; set; }
+    public Guid? ObligationId { get; set; }
 }
 public class BankDb(DbContextOptions<BankDb> options) : DbContext(options)
 {
@@ -65,6 +66,9 @@ public class BankDb(DbContextOptions<BankDb> options) : DbContext(options)
         b.Entity<Transfer>().HasIndex(x => new { x.Status, x.CreatedAt });
         b.Entity<Transfer>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.RequestedById).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Transfer>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.ReviewedById).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Transfer>().HasOne<Obligation>().WithMany().HasForeignKey(x => x.ObligationId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Transfer>().HasIndex(x => x.ObligationId).IsUnique()
+            .HasFilter("\"ObligationId\" IS NOT NULL AND \"Status\" IN ('PENDING_APPROVAL', 'EXECUTED')");
         GroupModel.Configure(b);
     }
 }

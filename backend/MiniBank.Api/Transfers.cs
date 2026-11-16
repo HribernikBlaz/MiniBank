@@ -34,22 +34,23 @@ internal static class Transfers
 
     public static int Offset(int? page) => page is null ? 0 : page is >= 1 and <= 100_000 ? (page.Value - 1) * 20 : -1;
 
-    private static async Task<IResult> Queue(int? page, BankDb db)
+    private static async Task<IResult> Queue(int? page, bool? reviewed, ClaimsPrincipal user, BankDb db)
     {
         var offset = Offset(page);
         if (offset < 0) return Error(400, "Neveljavna stran.");
+        var reviewer = Id(user);
         var rows = await (from t in db.Transfers
                           join source in db.Accounts on t.SourceAccountId equals source.Id
                           join target in db.Accounts on t.TargetAccountId equals target.Id
                           join sender in db.Users on source.OwnerId equals sender.Id
                           join recipient in db.Users on target.OwnerId equals recipient.Id
-                          where t.Status == Pending
-                          orderby t.CreatedAt, t.Id
-                          select new { t.Id, t.Amount, t.Purpose, t.CreatedAt, Sender = sender.Name,
+                          where reviewed == true ? t.ReviewedById == reviewer : t.Status == Pending
+                          orderby (reviewed == true ? t.ReviewedAt : t.CreatedAt), t.Id
+                          select new { t.Id, t.Amount, t.Purpose, t.CreatedAt, t.ReviewedAt, t.Status, reason = t.ReviewReason, Sender = sender.Name,
                               Recipient = recipient.Name, Source = source.Number, Target = target.Number })
             .Skip(offset).Take(20).ToListAsync();
         return Results.Ok(rows.Select(x => new { x.Id, amount = Money(x.Amount), x.Purpose, x.CreatedAt,
-            x.Sender, x.Recipient, x.Source, x.Target }));
+            x.Sender, x.Recipient, x.Source, x.Target, x.ReviewedAt, x.Status, x.reason }));
     }
 
     private static Task<IResult> Submit(TransferInput input, HttpRequest request, ClaimsPrincipal user, BankDb db)
@@ -67,7 +68,7 @@ internal static class Transfers
             var destination = await db.Accounts.SingleOrDefaultAsync(a => a.Number == target);
             var previous = await Previous(db, owner, key);
             if (previous is not null)
-                return previous.SourceAccountId == input.SourceAccountId && previous.TargetAccountId == destination?.Id
+                return previous.ObligationId is null && previous.SourceAccountId == input.SourceAccountId && previous.TargetAccountId == destination?.Id
                     && previous.Amount == amount && previous.Purpose == purpose
                     ? Results.Ok(View(previous)) : KeyConflict();
             if (destination is null) return Error(400, "Prejemnikov račun ne obstaja.");
@@ -89,7 +90,7 @@ internal static class Transfers
         var target = await db.Accounts.SingleOrDefaultAsync(x => x.Id == targetId);
         if (target is null || !await IsActiveClient(db, target.OwnerId)) return Error(400, "Prejemnikov račun ni na voljo.");
         if (source.Balance < amount) return Error(400, "Premalo sredstev.");
-        if (amount <= 500 && target.Balance > MaxAmount - amount) return Error(400, "Znesek presega dovoljeno stanje prejemnika.");
+        if (target.Balance > MaxAmount - amount) return Error(400, "Znesek presega dovoljeno stanje prejemnika.");
 
         var transfer = new Transfer
         {
