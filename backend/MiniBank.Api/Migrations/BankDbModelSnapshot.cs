@@ -113,6 +113,21 @@ namespace MiniBank.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("RequestKey")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("RequestedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReviewReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedById")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("SourceAccountId")
                         .HasColumnType("uuid");
 
@@ -125,7 +140,14 @@ namespace MiniBank.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ReviewedById");
+
+                    b.HasIndex("RequestedById", "RequestKey")
+                        .IsUnique();
+
                     b.HasIndex("SourceAccountId", "ExecutedAt");
+
+                    b.HasIndex("Status", "CreatedAt");
 
                     b.HasIndex("TargetAccountId", "ExecutedAt");
 
@@ -146,6 +168,16 @@ namespace MiniBank.Api.Migrations
 
             modelBuilder.Entity("MiniBank.Api.Transfer", b =>
                 {
+                    b.HasOne("MiniBank.Api.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MiniBank.Api.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MiniBank.Api.BankAccount", null)
                         .WithMany()
                         .HasForeignKey("SourceAccountId")

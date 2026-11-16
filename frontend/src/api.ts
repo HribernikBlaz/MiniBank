@@ -5,11 +5,13 @@ export async function refreshCsrf() {
   if (!response.ok) throw new ApiError('Povezava s strežnikom ni uspela', response.status);
   token = (await response.json()).token;
 }
-export async function api<T>(path: string, body?: unknown): Promise<T> {
+export async function api<T>(path: string, body?: unknown, key?: string): Promise<T> {
   if (body !== undefined && !token) await refreshCsrf();
   const response = await fetch(`/api${path}`, {
     method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin',
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token },
+    headers: body === undefined ? {} : {
+      'Content-Type': 'application/json', 'X-CSRF-TOKEN': token, ...(key ? { 'Idempotency-Key': key } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
