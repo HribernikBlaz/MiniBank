@@ -1,4 +1,4 @@
-using System.Globalization;
+using static MiniBank.Api.MvpWrite;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -89,6 +89,7 @@ banking.MapGet("/{id:guid}/transactions", async (Guid id, ClaimsPrincipal user, 
         .OrderByDescending(x => x.ExecutedAt).ThenByDescending(x => x.Id).Take(20).ToListAsync();
     return Results.Ok(transfers.Select(x => new { x.Id, amount = Money(x.Amount), direction = x.SourceAccountId == id ? "OUT" : "IN", x.Purpose, date = x.ExecutedAt }));
 });
+app.MapTransfers();
 if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Seed:Enabled"))
 {
     using var scope = app.Services.CreateScope();
@@ -97,7 +98,6 @@ if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("See
     await DevelopmentSeed.Run(db, builder.Configuration);
 }
 app.Run();
-static string Money(decimal amount) => amount.ToString("0.00", CultureInfo.InvariantCulture);
 public record Login(string? Email, string? Password);
 public static class DummyPassword { public static readonly string Hash = new PasswordHasher<AppUser>().HashPassword(new AppUser(), Guid.NewGuid().ToString()); }
 public partial class Program { }

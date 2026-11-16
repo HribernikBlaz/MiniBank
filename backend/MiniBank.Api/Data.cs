@@ -31,6 +31,11 @@ public class Transfer
     public string Status { get; set; } = "EXECUTED";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ExecutedAt { get; set; }
+    public Guid? RequestedById { get; set; }
+    public Guid? RequestKey { get; set; }
+    public Guid? ReviewedById { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public string? ReviewReason { get; set; }
 }
 public class BankDb(DbContextOptions<BankDb> options) : DbContext(options)
 {
@@ -51,6 +56,10 @@ public class BankDb(DbContextOptions<BankDb> options) : DbContext(options)
         b.Entity<Transfer>().HasOne<BankAccount>().WithMany().HasForeignKey(x => x.TargetAccountId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Transfer>().HasIndex(x => new { x.SourceAccountId, x.ExecutedAt });
         b.Entity<Transfer>().HasIndex(x => new { x.TargetAccountId, x.ExecutedAt });
+        b.Entity<Transfer>().HasIndex(x => new { x.RequestedById, x.RequestKey }).IsUnique();
+        b.Entity<Transfer>().HasIndex(x => new { x.Status, x.CreatedAt });
+        b.Entity<Transfer>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.RequestedById).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Transfer>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.ReviewedById).OnDelete(DeleteBehavior.Restrict);
     }
 }
 public static class DevelopmentSeed
