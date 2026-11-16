@@ -1,0 +1,8 @@
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.entry { border-top: 1px solid #dce5df; margin-top: 1rem; padding-top: 1rem; }
+.form-grid { display: grid; gap: 0 1rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+select { display: block; width: 100%; font: inherit; padding: 10px; margin-top: 7px; border: 1px solid #849c91; border-radius: 7px; color: inherit; background: white; }
+fieldset { margin: 1rem 0; border: 1px solid #dce5df; border-radius: 8px; }
+label.check { display: flex; gap: .5rem; align-items: center; margin-top: .5rem; }
+.check input { width: auto; margin: 0; }
+form > button:not(.primary) { margin-top: .75rem; }

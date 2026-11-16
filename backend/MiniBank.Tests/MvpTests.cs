@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using MiniBank.Api;
 using Xunit;
@@ -10,6 +11,72 @@ namespace MiniBank.Tests;
 
 public class MvpTests
 {
+    [Fact]
+    public async Task Group_invitation_draft_dispute_and_confirmation_work_together()
+    {
+        using var app = new BankFactory();
+        using var payer = app.Start();
+        using var member = app.CreateClient();
+        using var third = app.CreateClient();
+        var thirdUser = new AppUser { Email = "cene@minibank.test", Name = "Cene" };
+        thirdUser.PasswordHash = new PasswordHasher<AppUser>().HashPassword(thirdUser, "Local-Test-Password");
+        await Edit(app, db => { db.Users.Add(thirdUser); return Task.CompletedTask; });
+        await app.Login(payer);
+        var memberId = await LoginId(app, member, "empty");
+        await app.Login(third, "cene");
+        var group = await CreatedId(await payer.PostAsJsonAsync("/api/groups", new { name = "Večerja" }));
+        var root = $"/api/groups/{group}";
+        Assert.Equal(HttpStatusCode.NoContent, (await payer.PostAsJsonAsync(root + "/invite", new { email = "empty@minibank.test" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await payer.PostAsJsonAsync(root + "/invite", new { email = "empty@minibank.test" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await member.GetAsync(root + "/expenses")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await member.PostAsJsonAsync(root + "/invitation", new { accept = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await member.PostAsJsonAsync(root + "/invite", new { email = "cene@minibank.test" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await payer.PostAsJsonAsync(root + "/invite", new { email = "cene@minibank.test" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await third.PostAsJsonAsync(root + "/invitation", new { accept = true })).StatusCode);
+        var expense = await CreatedId(await payer.PostAsJsonAsync(root + "/expenses", new
+        {
+            title = "Večerja", category = "Hrana", date = DateOnly.FromDateTime(DateTime.UtcNow),
+            total = "10.00", accountId = app.AccountId, equal = true,
+            shares = new[] { new { userId = thirdUser.Id }, new { userId = memberId }, new { userId = app.AnaId } }
+        }));
+        Assert.Empty((await member.GetFromJsonAsync<JsonElement>(root + "/expenses")).EnumerateArray());
+        var path = $"{root}/expenses/{expense}";
+        Assert.Equal(HttpStatusCode.NoContent, (await payer.PostAsJsonAsync(path + "/submit", new { })).StatusCode);
+        var proposals = await member.GetFromJsonAsync<JsonElement>(root + "/expenses");
+        var shares = proposals[0].GetProperty("shares").EnumerateArray().ToList();
+        var first = new[] { app.AnaId, memberId, thirdUser.Id }.Min();
+        Assert.All(shares, share => Assert.Equal(share.GetProperty("userId").GetGuid() == first ? "3.34" : "3.33",
+            share.GetProperty("amount").GetString()));
+        Assert.Equal(HttpStatusCode.BadRequest, (await member.PostAsJsonAsync(path + "/decision", new { accept = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await member.PostAsJsonAsync(path + "/decision", new { accept = false, reason = "Preveri znesek" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await third.PostAsJsonAsync(path + "/decision", new { accept = true })).StatusCode);
+        await Edit(app, async db => Assert.Empty(await db.Obligations.ToListAsync()));
+
+        var revised = await CreatedId(await payer.PostAsJsonAsync(path + "/revise", new { }));
+        var next = $"{root}/expenses/{revised}";
+        Assert.Equal(HttpStatusCode.NoContent, (await payer.PostAsJsonAsync(next + "/submit", new { })).StatusCode);
+        if (Environment.GetEnvironmentVariable("MINIBANK_TEST_POSTGRES") is not null)
+        {
+            var responses = await Task.WhenAll(member.PostAsJsonAsync(next + "/decision", new { accept = true }),
+                third.PostAsJsonAsync(next + "/decision", new { accept = true }));
+            Assert.All(responses, response => Assert.Equal(HttpStatusCode.NoContent, response.StatusCode));
+        }
+        else
+        {
+            Assert.Equal(HttpStatusCode.NoContent, (await member.PostAsJsonAsync(next + "/decision", new { accept = true })).StatusCode);
+            await Edit(app, async db => Assert.Empty(await db.Obligations.ToListAsync()));
+            Assert.Equal(HttpStatusCode.NoContent, (await third.PostAsJsonAsync(next + "/decision", new { accept = true })).StatusCode);
+        }
+        Assert.Equal(HttpStatusCode.NoContent, (await member.PostAsJsonAsync(next + "/decision", new { accept = true })).StatusCode);
+        await Edit(app, async db =>
+        {
+            Assert.Equal(2, await db.Obligations.CountAsync());
+            Assert.Equal("Preveri znesek", (await db.Shares.FindAsync(expense, memberId))!.Reason);
+            Assert.Equal("CONFIRMED", (await db.Expenses.FindAsync(revised))!.Status);
+            Assert.Equal(200m, (await db.Accounts.FindAsync(app.AccountId))!.Balance);
+        });
+    }
+
     [Fact]
     public async Task Transfer_replay_approval_threshold_and_audit()
     {
@@ -67,6 +134,19 @@ public class MvpTests
 
     private static object Transfer(Guid id, string amount) =>
         new { sourceAccountId = id, targetAccount = "MB-BOR", amount, purpose = "Preizkus" };
+
+    private static async Task<Guid> LoginId(BankFactory app, HttpClient client, string name)
+    {
+        var result = await app.Login(client, name);
+        result.EnsureSuccessStatusCode();
+        return (await result.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
+    private static async Task<Guid> CreatedId(HttpResponseMessage response)
+    {
+        Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
 
     private static async Task Edit(BankFactory app, Func<BankDb, Task> action)
     {

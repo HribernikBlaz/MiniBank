@@ -90,6 +90,8 @@ banking.MapGet("/{id:guid}/transactions", async (Guid id, ClaimsPrincipal user, 
     return Results.Ok(transfers.Select(x => new { x.Id, amount = Money(x.Amount), direction = x.SourceAccountId == id ? "OUT" : "IN", x.Purpose, date = x.ExecutedAt }));
 });
 app.MapTransfers();
+app.MapGroups();
+app.MapExpenses();
 if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Seed:Enabled"))
 {
     using var scope = app.Services.CreateScope();
