@@ -28,9 +28,14 @@ internal static class MvpWrite
         }
     }
 
-    private static bool Retryable(Exception e) =>
-        (e as PostgresException ?? e.InnerException as PostgresException)?.SqlState is
-            PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.UniqueViolation;
+    private static bool Retryable(Exception error)
+    {
+        for (Exception? cause = error; cause is not null; cause = cause.InnerException)
+            if (cause is PostgresException postgres && postgres.SqlState is
+                PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.UniqueViolation)
+                return true;
+        return false;
+    }
 
     public static Guid Id(ClaimsPrincipal user) => Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
