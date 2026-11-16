@@ -2,7 +2,9 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { api, ApiError, refreshCsrf } from './api';
 import { money, ReviewQueue, TransferPanel } from './Banking';
+import { Community } from './Community';
 import './style.css';
+import './mvp.css';
 
 type User = { id: string; name: string; role: string };
 type Account = { id: string; number: string; label: string; balance: string };
@@ -73,6 +75,7 @@ function App() {
         <h2>Moji računi</h2>{accounts.length === 0 ? <p>Nimate odprtega računa.</p> : <div className="accounts">{accounts.map(a => <button key={a.id} className={`account ${selected === a.id ? 'selected' : ''}`} onClick={() => { setError(''); setSelected(a.id); }} aria-pressed={selected === a.id}><span>{a.label}</span><strong>{money(a.balance)}</strong><small>{a.number}</small></button>)}</div>}
         {selected && <section><h2>Zadnja izvedena nakazila</h2><p>Največ 20 nakazil za izbrani račun.</p>{historyLoading ? <p role="status">Nalaganje nakazil …</p> : transactions.length === 0 ? <p>Za ta račun še ni izvedenih nakazil.</p> : <div className="table-scroll"><table><thead><tr><th>Datum</th><th>Namen</th><th>Smer</th><th>Znesek</th></tr></thead><tbody>{transactions.map(t => <tr key={t.id}><td>{new Date(t.date).toLocaleString('sl-SI')}</td><td>{t.purpose}</td><td>{t.direction === 'IN' ? 'Priliv' : 'Odliv'}</td><td>{t.direction === 'IN' ? '+' : '−'}{money(t.amount)}</td></tr>)}</tbody></table></div>}</section>}
         {selected && <TransferPanel key={selected} accountId={selected} onChange={reloadBanking}/>}
+        <Community userId={user.id} accounts={accounts}/>
       </> }</> }</main><footer>MiniBank · Izmišljeni podatki za učenje</footer></>;
 }
 createRoot(document.getElementById('root')!).render(<App/>);

@@ -42,6 +42,11 @@ public class BankDb(DbContextOptions<BankDb> options) : DbContext(options)
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<BankAccount> Accounts => Set<BankAccount>();
     public DbSet<Transfer> Transfers => Set<Transfer>();
+    public DbSet<BankGroup> Groups => Set<BankGroup>();
+    public DbSet<GroupMembership> Memberships => Set<GroupMembership>();
+    public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<ExpenseShare> Shares => Set<ExpenseShare>();
+    public DbSet<Obligation> Obligations => Set<Obligation>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         b.Entity<AppUser>().HasIndex(x => x.Email).IsUnique();
@@ -60,6 +65,7 @@ public class BankDb(DbContextOptions<BankDb> options) : DbContext(options)
         b.Entity<Transfer>().HasIndex(x => new { x.Status, x.CreatedAt });
         b.Entity<Transfer>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.RequestedById).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Transfer>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.ReviewedById).OnDelete(DeleteBehavior.Restrict);
+        GroupModel.Configure(b);
     }
 }
 public static class DevelopmentSeed
