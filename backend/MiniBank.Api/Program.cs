@@ -44,6 +44,9 @@ builder.Services.AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDef
 builder.Services.AddAuthorization();
 var app = builder.Build();
 if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing")) app.UseHttpsRedirection();
+// Produkcija: backend streže zgrajen frontend iz wwwroot (ista domena, piškotki delujejo brez CORS).
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.Use(async (ctx, next) =>
@@ -94,7 +97,10 @@ app.MapGroups();
 app.MapExpenses();
 app.MapObligations();
 app.MapAdministration();
-if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Seed:Enabled"))
+// Vse poti zunaj /api vrnejo index.html (React usmerjanje); neznana pot /api ostane 404.
+app.MapFallbackToFile("{*path:regex(^(?!api(/|$)).*)}", "index.html");
+// Seed:Enabled požene migracije in demo podatke v prazni bazi (tudi v produkciji; to je učna simulacija).
+if (builder.Configuration.GetValue<bool>("Seed:Enabled"))
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<BankDb>();
