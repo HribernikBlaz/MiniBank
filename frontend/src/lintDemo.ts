@@ -1,1 +1,0 @@
-const unusedValue = 1;
