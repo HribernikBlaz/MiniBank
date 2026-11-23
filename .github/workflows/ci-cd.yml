@@ -97,16 +97,24 @@ jobs:
       - run: dotnet restore --locked-mode --configfile NuGet.Config
       - name: Backend tests (SQLite)
         run: dotnet test --no-restore
-      - name: Backend tests (PostgreSQL)
-        run: dotnet test --no-build --no-restore
+      - name: Backend tests (PostgreSQL) + coverage
+        run: dotnet test --no-build --no-restore --collect:"XPlat Code Coverage" --results-directory coverage/backend
         env:
           MINIBANK_TEST_POSTGRES: Host=localhost;Database=minibank;Username=minibank;Password=ci-local-password
       - name: Migrations
         run: dotnet ef database update --no-build --project backend/MiniBank.Api
         env:
           ConnectionStrings__MiniBank: Host=localhost;Database=minibank;Username=minibank;Password=ci-local-password
-      - name: Frontend tests
+      - name: Frontend tests + coverage
         working-directory: frontend
         run: |
           npm ci
-          npm test
+          npm run test:coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: |
+            coverage/backend
+            frontend/coverage
+          if-no-files-found: error
