@@ -1,0 +1,112 @@
+name: CI/CD
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Backend (dotnet format)
+        run: |
+          dotnet restore --locked-mode --configfile NuGet.Config
+          dotnet format MiniBank.slnx --verify-no-changes --no-restore
+      - name: Frontend (ESLint)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Backend (dotnet publish)
+        run: |
+          dotnet restore --locked-mode --configfile NuGet.Config
+          dotnet publish backend/MiniBank.Api -c Release --no-restore -o publish/api
+      - name: Frontend (vite build)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend
+          path: publish/api
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend
+          path: frontend/dist
+          if-no-files-found: error
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_USER: minibank
+          POSTGRES_PASSWORD: ci-local-password
+          POSTGRES_DB: minibank
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U minibank" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: dotnet tool restore
+      - run: dotnet restore --locked-mode --configfile NuGet.Config
+      - name: Backend tests (SQLite)
+        run: dotnet test --no-restore
+      - name: Backend tests (PostgreSQL)
+        run: dotnet test --no-build --no-restore
+        env:
+          MINIBANK_TEST_POSTGRES: Host=localhost;Database=minibank;Username=minibank;Password=ci-local-password
+      - name: Migrations
+        run: dotnet ef database update --no-build --project backend/MiniBank.Api
+        env:
+          ConnectionStrings__MiniBank: Host=localhost;Database=minibank;Username=minibank;Password=ci-local-password
+      - name: Frontend tests
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test

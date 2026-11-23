@@ -35,8 +35,11 @@ internal static class Obligations
         return Results.Ok(new
         {
             payable = Money(payable), receivable = Money(receivable), net = Money(receivable - payable),
-            items = rows.Select(r => new { r.Id, r.Title, r.Debtor, r.Creditor, r.Owes, amount = Money(r.Amount),
-                status = r.Settled ? "SETTLED" : r.Pending ? "PAYMENT_PENDING" : "OPEN" })
+            items = rows.Select(r => new
+            {
+                r.Id, r.Title, r.Debtor, r.Creditor, r.Owes, amount = Money(r.Amount),
+                status = r.Settled ? "SETTLED" : r.Pending ? "PAYMENT_PENDING" : "OPEN"
+            })
         });
     }
 

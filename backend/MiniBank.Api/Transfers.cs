@@ -46,11 +46,17 @@ internal static class Transfers
                           join recipient in db.Users on target.OwnerId equals recipient.Id
                           where reviewed == true ? t.ReviewedById == reviewer : t.Status == Pending
                           orderby (reviewed == true ? t.ReviewedAt : t.CreatedAt), t.Id
-                          select new { t.Id, t.Amount, t.Purpose, t.CreatedAt, t.ReviewedAt, t.Status, reason = t.ReviewReason, Sender = sender.Name,
-                              Recipient = recipient.Name, Source = source.Number, Target = target.Number })
+                          select new
+                          {
+                              t.Id, t.Amount, t.Purpose, t.CreatedAt, t.ReviewedAt, t.Status, reason = t.ReviewReason, Sender = sender.Name,
+                              Recipient = recipient.Name, Source = source.Number, Target = target.Number
+                          })
             .Skip(offset).Take(20).ToListAsync();
-        return Results.Ok(rows.Select(x => new { x.Id, amount = Money(x.Amount), x.Purpose, x.CreatedAt,
-            x.Sender, x.Recipient, x.Source, x.Target, x.ReviewedAt, x.Status, x.reason }));
+        return Results.Ok(rows.Select(x => new
+        {
+            x.Id, amount = Money(x.Amount), x.Purpose, x.CreatedAt,
+            x.Sender, x.Recipient, x.Source, x.Target, x.ReviewedAt, x.Status, x.reason
+        }));
     }
 
     private static Task<IResult> Submit(TransferInput input, HttpRequest request, ClaimsPrincipal user, BankDb db)
@@ -158,8 +164,11 @@ internal static class Transfers
         transfer.ExecutedAt = now;
     }
 
-    public static object View(Transfer t) => new { t.Id, amount = Money(t.Amount), t.Purpose,
-        t.Status, t.CreatedAt, t.ExecutedAt, reason = t.ReviewReason };
+    public static object View(Transfer t) => new
+    {
+        t.Id, amount = Money(t.Amount), t.Purpose,
+        t.Status, t.CreatedAt, t.ExecutedAt, reason = t.ReviewReason
+    };
 }
 
 internal record TransferInput(Guid SourceAccountId, string? TargetAccount, string? Amount, string? Purpose);
