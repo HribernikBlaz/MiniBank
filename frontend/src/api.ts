@@ -1,13 +1,15 @@
+// Prazno = isti izvor kot frontend (produkcija v enem servisu, razvoj prek Vite proxyja).
+const base = import.meta.env.VITE_API_URL ?? '';
 let token = '';
 export class ApiError extends Error { constructor(message: string, public status: number) { super(message); } }
 export async function refreshCsrf() {
-  const response = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
+  const response = await fetch(`${base}/api/auth/csrf`, { credentials: 'same-origin' });
   if (!response.ok) throw new ApiError('Povezava s strežnikom ni uspela', response.status);
   token = (await response.json()).token;
 }
 export async function api<T>(path: string, body?: unknown, key?: string): Promise<T> {
   if (body !== undefined && !token) await refreshCsrf();
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(`${base}/api${path}`, {
     method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin',
     headers: body === undefined ? {} : {
       'Content-Type': 'application/json', 'X-CSRF-TOKEN': token, ...(key ? { 'Idempotency-Key': key } : {}),

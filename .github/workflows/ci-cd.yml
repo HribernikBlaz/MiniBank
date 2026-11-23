@@ -54,6 +54,9 @@ jobs:
           dotnet publish backend/MiniBank.Api -c Release --no-restore -o publish/api
       - name: Frontend (vite build)
         working-directory: frontend
+        env:
+          # URL nameščenega backenda (repozitorijska spremenljivka API_URL); prazno = isti izvor.
+          VITE_API_URL: ${{ vars.API_URL }}
         run: |
           npm ci
           npm run build
@@ -118,3 +121,26 @@ jobs:
             coverage/backend
             frontend/coverage
           if-no-files-found: error
+
+  deploy:
+    needs: [lint, build, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.API_URL }}
+    steps:
+      # Artefakta iz joba build; aplikacije tu ne gradimo znova, frontend samo položimo v wwwroot backenda.
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend
+          path: site
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend
+          path: site/wwwroot
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: site

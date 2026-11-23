@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MiniBank.Api;
@@ -126,5 +127,25 @@ public class ValidationTests
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/admin/users", valid with { role = "SEF" })).StatusCode);
         Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/users", valid)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync("/api/admin/users", valid)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Frontend_is_served_for_site_paths_but_not_for_unknown_api_paths()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(dir.FullName, "index.html"), "<html>MiniBank</html>");
+            using var root = new BankFactory();
+            using var app = root.WithWebHostBuilder(b => b.UseWebRoot(dir.FullName));
+            using var client = app.CreateClient();
+            Assert.Contains("MiniBank", await client.GetStringAsync("/"));
+            Assert.Contains("MiniBank", await client.GetStringAsync("/obveznosti"));
+            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/neznano")).StatusCode);
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
     }
 }
