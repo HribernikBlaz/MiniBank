@@ -99,7 +99,8 @@ public sealed class BankFactory : WebApplicationFactory<Program>
 }
 public class AcceptanceTests
 {
-    [Fact] public async Task US18_Login_logout_and_csrf()
+    [Fact]
+    public async Task US18_Login_logout_and_csrf()
     {
         using var app = new BankFactory(); using var client = app.Start();
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/accounts")).StatusCode);
@@ -113,7 +114,8 @@ public class AcceptanceTests
         Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/logout", new { })).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
     }
-    [Fact] public async Task US18_Invalid_login_has_identical_response()
+    [Fact]
+    public async Task US18_Invalid_login_has_identical_response()
     {
         using var app = new BankFactory(); using var client = app.Start();
         string? expected = null;
@@ -125,14 +127,17 @@ public class AcceptanceTests
             Assert.Contains("Prijava ni uspela", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("message").GetString());
         }
     }
-    [Theory] [InlineData("admin")] [InlineData("employee")]
+    [Theory]
+    [InlineData("admin")]
+    [InlineData("employee")]
     public async Task US18_Other_roles_cannot_open_banking(string role)
     {
         using var app = new BankFactory(); using var client = app.Start();
         Assert.Equal(HttpStatusCode.OK, (await app.Login(client, role)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/accounts")).StatusCode);
     }
-    [Fact] public async Task US18_Deactivation_and_role_changes_revoke_open_session()
+    [Fact]
+    public async Task US18_Deactivation_and_role_changes_revoke_open_session()
     {
         using var app = new BankFactory(); using var client = app.Start(); await app.Login(client);
         using (var scope = app.Services.CreateScope())
@@ -155,7 +160,8 @@ public class AcceptanceTests
         }
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/accounts")).StatusCode);
     }
-    [Fact] public async Task US18_Idle_timeout_and_restart_require_login()
+    [Fact]
+    public async Task US18_Idle_timeout_and_restart_require_login()
     {
         using var app = new BankFactory(); using var client = app.Start(); await app.Login(client);
         app.Clock.Advance(TimeSpan.FromMinutes(20));
@@ -169,7 +175,8 @@ public class AcceptanceTests
         var key = await store.StoreAsync(new AuthenticationTicket(new System.Security.Claims.ClaimsPrincipal(), "Cookies"));
         Assert.Null(await freshStore.RetrieveAsync(key));
     }
-    [Fact] public async Task US01_Own_accounts_and_last_20_executed_transfers_only()
+    [Fact]
+    public async Task US01_Own_accounts_and_last_20_executed_transfers_only()
     {
         using var app = new BankFactory(); using var client = app.Start(); await app.Login(client);
         var accounts = await client.GetFromJsonAsync<JsonElement>("/api/accounts");
@@ -181,7 +188,8 @@ public class AcceptanceTests
         Assert.Equal("Test 19", history[19].GetProperty("purpose").GetString());
         Assert.All(history.EnumerateArray(), t => Assert.Equal("OUT", t.GetProperty("direction").GetString()));
     }
-    [Fact] public async Task US01_No_accounts_returns_empty_list()
+    [Fact]
+    public async Task US01_No_accounts_returns_empty_list()
     {
         using var app = new BankFactory(); using var client = app.Start();
         using (var scope = app.Services.CreateScope())

@@ -110,8 +110,11 @@ internal static class Expenses
                 {
                     expense.Status = Confirmed;
                     foreach (var participant in expense.Shares.Where(s => s.UserId != expense.PayerId && s.Value > 0))
-                        db.Obligations.Add(new Obligation { ExpenseId = id, DebtorId = participant.UserId,
-                            CreditorId = expense.PayerId, AccountId = expense.AccountId, Amount = participant.Value });
+                        db.Obligations.Add(new Obligation
+                        {
+                            ExpenseId = id, DebtorId = participant.UserId,
+                            CreditorId = expense.PayerId, AccountId = expense.AccountId, Amount = participant.Value
+                        });
                 }
             }
             return Results.NoContent();
@@ -124,10 +127,13 @@ internal static class Expenses
             if (prior is null || prior.PayerId != owner) return Results.NotFound();
             if (prior.Status != Disputed || await db.Expenses.AnyAsync(x => x.PreviousId == id))
                 return Error(409, "Samo sporni predlog brez naslednika lahko revidirate.");
-            var next = new Expense { GroupId = groupId, PayerId = owner, AccountId = prior.AccountId,
+            var next = new Expense
+            {
+                GroupId = groupId, PayerId = owner, AccountId = prior.AccountId,
                 Version = prior.Version + 1, PreviousId = id, Title = prior.Title, Category = prior.Category,
                 Date = prior.Date, Total = prior.Total,
-                Shares = prior.Shares.Select(s => new ExpenseShare { UserId = s.UserId, Value = s.Value }).ToList() };
+                Shares = prior.Shares.Select(s => new ExpenseShare { UserId = s.UserId, Value = s.Value }).ToList()
+            };
             db.Expenses.Add(next);
             prior.Status = Superseded;
             return Results.Json(new { next.Id }, statusCode: 201);
@@ -157,10 +163,10 @@ internal static class Expenses
 
     private static async Task<bool> ActiveParticipants(BankDb db, Guid groupId, Guid[] ids) =>
         await (from member in db.Memberships
-         join user in db.Users on member.UserId equals user.Id
-         where member.GroupId == groupId && member.Status == Groups.Member && user.Active && user.Role == "CLIENT"
-            && ids.Contains(member.UserId)
-         select member).CountAsync() == ids.Length;
+               join user in db.Users on member.UserId equals user.Id
+               where member.GroupId == groupId && member.Status == Groups.Member && user.Active && user.Role == "CLIENT"
+                  && ids.Contains(member.UserId)
+               select member).CountAsync() == ids.Length;
 
     private static async Task<IResult?> Apply(BankDb db, Expense expense, ExpenseInput input)
     {
