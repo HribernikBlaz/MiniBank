@@ -47,6 +47,8 @@ if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"
 // Produkcija: backend streže zgrajen frontend iz wwwroot (ista domena, piškotki delujejo brez CORS).
 app.UseDefaultFiles();
 app.UseStaticFiles();
+// Usmerjanje mora priti za statičnimi datotekami: sicer ga ujame fallback in datoteke ne bi bile postrežene.
+app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.Use(async (ctx, next) =>
