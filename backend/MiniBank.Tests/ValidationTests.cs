@@ -136,11 +136,14 @@ public class ValidationTests
         try
         {
             await File.WriteAllTextAsync(Path.Combine(dir.FullName, "index.html"), "<html>MiniBank</html>");
+            Directory.CreateDirectory(Path.Combine(dir.FullName, "assets"));
+            await File.WriteAllTextAsync(Path.Combine(dir.FullName, "assets", "app.js"), "console.log(1);");
             using var root = new BankFactory();
             using var app = root.WithWebHostBuilder(b => b.UseWebRoot(dir.FullName));
             using var client = app.CreateClient();
             Assert.Contains("MiniBank", await client.GetStringAsync("/"));
             Assert.Contains("MiniBank", await client.GetStringAsync("/obveznosti"));
+            Assert.Equal("console.log(1);", await client.GetStringAsync("/assets/app.js"));
             Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/neznano")).StatusCode);
         }
         finally
