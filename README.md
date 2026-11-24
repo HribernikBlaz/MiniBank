@@ -1,10 +1,23 @@
 # MiniBank
 
+![CI/CD](https://github.com/HribernikBlaz/MiniBank/actions/workflows/ci-cd.yml/badge.svg)
+
+**Aplikacija:** https://minibank-hribernik-aba7c9aef5fhfzhm.austriaeast-01.azurewebsites.net/
+
 Učna simulacija skupnostnega bančništva z izmišljenimi podatki in EUR.
 
-MVP pokriva US-01–US-07 in US-16–US-18. Komitent lahko pregleda račune, odda nakazilo, sodeluje v skupini, razdeli strošek in poravna obveznost. Uslužbenec obravnava nakazila nad 500 EUR, administrator pa uporabniške dostope.
+MVP pokriva US-01-US-07 in US-16-US-18. Komitent lahko pregleda račune, odda nakazilo, sodeluje v skupini, razdeli strošek in poravna obveznost. Uslužbenec obravnava nakazila nad 500 EUR, administrator pa uporabniške dostope.
 
 [MVP Board](https://github.com/users/JakaM1/projects/3) · [Načrt in preverjanje](docs/08-implementacija-mvp.md) · [Uporabniške zgodbe](docs/05-uporabniske-zgodbe.md) · [Arhitektura](docs/04-arhitektura-in-tehnoloski-sklad.md) · [ADR](docs/adr/README.md)
+
+## CI/CD cevovod
+
+Cevovod je v `.github/workflows/ci-cd.yml` (GitHub Actions). Zažene se ob PR v `main` in ob pushu v `main`. Veja `main` je zaščitena: merge je mogoč samo prek PR, ko uspejo `lint`, `build` in `test`.
+
+1. **lint** - preveri slog kode: `dotnet format --verify-no-changes` (backend) in ESLint (frontend).
+2. **build** - sestavi aplikacijo: `dotnet publish` in `vite build`. Rezultat shrani kot artefakta `backend` in `frontend`. NuGet in npm sta v cache-u.
+3. **test** - 26 backend testov (SQLite in PostgreSQL) in 6 frontend testov, skupaj 32. Preveri tudi migracije in naloži poročilo o pokritosti (`coverage-report`).
+4. **deploy** - teče samo ob pushu v `main`, ko uspejo vsi trije prejšnji jobi. Vzame artefakta iz `build` in ju objavi na Azure App Service (podatki v Neon PostgreSQL). Skrivnosti so v GitHub environmentu `production`.
 
 ## Lokalni zagon
 
